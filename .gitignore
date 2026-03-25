@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+data/results/*.json
+data/neo4j/
+data/models/*.pt
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/

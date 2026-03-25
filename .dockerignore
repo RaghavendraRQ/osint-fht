@@ -1,0 +1,10 @@
+.git
+.jj
+.env
+data/neo4j
+data/results/*.json
+__pycache__
+*.pyc
+.venv
+.mypy_cache
+.pytest_cache

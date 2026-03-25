@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Framework – Human Trafficker Identification</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1><span>OSINT</span> Framework</h1>
+            <nav>
+                <a href="/">Search</a>
+                <a href="/history">History</a>
+                <a href="/api/status">API Status</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="hero">
+            <h2>Phone-Centric OSINT Investigation</h2>
+            <p>Enter a phone number to run a full OSINT investigation across surface web, dark web, and graph analytics with GNN-powered risk scoring.</p>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title">New Investigation</div>
+                <form id="searchForm">
+                    <div class="form-group">
+                        <label for="phone">Phone Number (with country code)</label>
+                        <input type="text" id="phone" name="phone_number" placeholder="+91-XXXXXXXXXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email (optional)</label>
+                        <input type="email" id="email" name="email" placeholder="suspect@example.com">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" id="darkweb" name="include_darkweb" checked style="width:auto;">
+                        <label for="darkweb" style="margin:0;">Include dark web search</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Start Investigation</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Investigation Progress</div>
+                <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+                <div id="logContainer" style="max-height:300px; overflow-y:auto;">
+                    <div class="log-line" style="color:var(--text-secondary);">Waiting for investigation...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="statusCard" style="display:none;">
+            <div class="card-title">API Status</div>
+            <div class="grid-3" id="statusGrid"></div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            AI-Enhanced OSINT Framework – Academic Research Project
+        </div>
+    </footer>
+
+    <script>
+        const form = document.getElementById('searchForm');
+        const logContainer = document.getElementById('logContainer');
+        const progressFill = document.getElementById('progressFill');
+        const submitBtn = document.getElementById('submitBtn');
+
+        const TOTAL_STEPS = 10;
+        let currentStep = 0;
+
+        function addLog(text, cls = '') {
+            const div = document.createElement('div');
+            div.className = 'log-line ' + cls;
+            div.textContent = text;
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateProgress() {
+            currentStep++;
+            const pct = Math.min((currentStep / TOTAL_STEPS) * 100, 100);
+            progressFill.style.width = pct + '%';
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            logContainer.innerHTML = '';
+            currentStep = 0;
+            progressFill.style.width = '0%';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Investigating...';
+
+            const formData = new FormData(form);
+            const phone = formData.get('phone_number');
+
+            try {
+                const response = await fetch('/search/stream', { method: 'POST', body: formData });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const parsed = JSON.parse(line.slice(6));
+                                handleEvent(parsed);
+                            } catch (err) {}
+                        }
+                    }
+                }
+
+                addLog('Investigation complete – redirecting...', 'success');
+                updateProgress();
+                setTimeout(() => {
+                    window.location.href = '/results/' + encodeURIComponent(phone);
+                }, 1500);
+            } catch (err) {
+                addLog('Error: ' + err.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Investigation';
+            }
+        });
+
+        function handleEvent(parsed) {
+            const evt = parsed.event || parsed.type;
+            const data = parsed.data;
+
+            switch (evt) {
+                case 'validation':
+                    addLog('Phone validated: ' + (data.international || data.e164 || 'OK'), data.valid ? 'success' : 'error');
+                    updateProgress();
+                    break;
+                case 'api_result':
+                    const status = data.success ? 'success' : 'error';
+                    addLog(`[${data.source}] ${data.success ? 'OK' : 'Failed: ' + (data.error || '')}`, status);
+                    updateProgress();
+                    break;
+                case 'entities':
+                    const total = Object.values(data).reduce((s, arr) => s + (arr.length || 0), 0);
+                    addLog(`Resolved ${total} entities`, 'success');
+                    updateProgress();
+                    break;
+                case 'darkweb':
+                    const mentions = data.data ? data.data.total_mentions : 0;
+                    addLog(`Dark web: ${mentions} mentions found`, mentions > 0 ? 'error' : 'success');
+                    updateProgress();
+                    break;
+                case 'gnn_risk':
+                    const score = data.gnn_score != null ? (data.gnn_score * 100).toFixed(1) + '%' : 'N/A';
+                    addLog(`GNN Risk Score: ${score} (${data.gnn_risk_level || 'N/A'})`, '');
+                    updateProgress();
+                    break;
+                case 'status':
+                    addLog(data.message || JSON.stringify(data));
+                    break;
+                case 'complete':
+                    addLog('Pipeline complete', 'success');
+                    break;
+                default:
+                    addLog(`[${evt}] received`);
+            }
+        }
+
+        (async () => {
+            try {
+                const resp = await fetch('/api/status');
+                const status = await resp.json();
+                const card = document.getElementById('statusCard');
+                const grid = document.getElementById('statusGrid');
+                card.style.display = 'block';
+
+                const items = [
+                    { name: 'Neo4j', ok: status.neo4j },
+                    { name: 'GNN Model', ok: status.gnn_model_loaded },
+                    ...Object.entries(status.apis || {}).map(([k, v]) => ({ name: k, ok: v })),
+                ];
+
+                grid.innerHTML = items.map(i => `
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <span class="status-dot ${i.ok ? 'online' : 'offline'}"></span>
+                        <span style="font-size:0.8125rem;">${i.name}</span>
+                    </div>
+                `).join('');
+            } catch (e) {}
+        })();
+    </script>
+</body>
+</html>

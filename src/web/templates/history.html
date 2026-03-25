@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investigation History</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1><span>OSINT</span> Framework</h1>
+            <nav>
+                <a href="/">Search</a>
+                <a href="/history">History</a>
+                <a href="/api/status">API Status</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container" style="padding-top:2rem;">
+        <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;">Investigation History</h2>
+
+        {% if results %}
+        <div class="card">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Phone</th>
+                            <th>Timestamp</th>
+                            <th>Risk Level</th>
+                            <th>Risk Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in results %}
+                        <tr>
+                            <td style="font-weight:600;">{{ r.phone }}</td>
+                            <td style="color:var(--text-secondary);font-size:0.8125rem;">{{ r.timestamp }}</td>
+                            <td><span class="badge badge-{{ r.risk_level|lower }}">{{ r.risk_level }}</span></td>
+                            <td>{{ "%.4f"|format(r.risk_score) }}</td>
+                            <td>
+                                <a href="/results/{{ r.phone }}" class="btn btn-outline" style="font-size:0.75rem;padding:0.25rem 0.75rem;">View</a>
+                                <a href="/download/{{ r.phone }}" class="btn btn-outline" style="font-size:0.75rem;padding:0.25rem 0.75rem;">JSON</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="card" style="text-align:center;padding:3rem;">
+            <p style="color:var(--text-secondary);font-size:1rem;">No investigations yet. Start one from the <a href="/" style="color:var(--accent);">search page</a>.</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        <div class="container">AI-Enhanced OSINT Framework – Academic Research Project</div>
+    </footer>
+</body>
+</html>
