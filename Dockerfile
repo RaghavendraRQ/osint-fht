@@ -19,7 +19,10 @@ RUN pip install --no-cache-dir --prefix=/install \
     pip install --no-cache-dir --prefix=/install \
         torch-geometric==2.6.1
 
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt || true
+ENV PYTHONPATH=/install/lib/python3.11/site-packages
+
+RUN grep -v -E '^torch' requirements.txt > /tmp/reqs-no-torch.txt && \
+    pip install --no-cache-dir --prefix=/install -r /tmp/reqs-no-torch.txt
 
 ##############################################
 # Stage 2 – Runtime
