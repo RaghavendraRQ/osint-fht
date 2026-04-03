@@ -165,7 +165,7 @@
                                 <span class="badge badge-{{ kw.tier }}" style="font-size:0.625rem;margin:0.125rem;">{{ kw.term }}</span>
                                 {% endfor %}
                             </td>
-                            <td style="font-weight:600;">{{ "%.2f"|format(r.keyword_score) }}</td>
+                            <td style="font-weight:600;">{{ "%.2f"|format(r.keyword_score|default(0)) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -218,11 +218,44 @@
             <div class="grid-2">
                 <div>
                     <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;">Connected Investigations</h4>
-                    <div id="connectionsData" style="font-size:0.8125rem;">Loading...</div>
+                    <div id="connectionsData" style="font-size:0.8125rem;">
+                        {% if data and data.entities and data.entities.phones %}
+                        {% set other_phones = [] %}
+                        {% for p in data.entities.phones %}
+                        {% if p.value != data.phone %}
+                        <div style="padding:0.25rem 0;">
+                            <span class="badge badge-medium">LINKED</span>
+                            <a href="/results/{{ p.value }}" style="color:var(--accent);text-decoration:none;">{{ p.value }}</a>
+                            <span style="color:var(--text-secondary);font-size:0.75rem;margin-left:0.5rem;">
+                                conf: {{ "%.0f"|format(p.confidence * 100) }}% | {{ p.sources|join(", ") }}
+                                {% if p.note %} — {{ p.note }}{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% else %}
+                        No connected investigations found.
+                        {% endif %}
+                    </div>
                 </div>
                 <div>
                     <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;">Activity Timeline</h4>
-                    <div id="timelineData" style="font-size:0.8125rem;">Loading...</div>
+                    <div id="timelineData" style="font-size:0.8125rem;">
+                        {% if data and data.darkweb and data.darkweb.data and data.darkweb.data.results %}
+                        {% for r in data.darkweb.data.results %}
+                        <div style="padding:0.25rem 0;border-bottom:1px solid rgba(51,65,85,0.3);">
+                            <div style="font-weight:500;">{{ r.title[:55] }}</div>
+                            <div style="color:var(--text-secondary);font-size:0.75rem;">
+                                Score: {{ "%.1f"|format(r.keyword_score|default(0)) }} |
+                                Keywords: {{ r.matched_keywords|length if r.matched_keywords else 0 }} |
+                                Seen: {{ data.timestamp[:10] }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        No timeline data.
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -254,24 +287,18 @@
         fetch('/api/graph/connections/' + encodeURIComponent(phone))
             .then(r => r.json())
             .then(data => {
-                const el = document.getElementById('connectionsData');
                 if (Array.isArray(data) && data.length > 0) {
-                    el.innerHTML = data.map(c =>
-                        `<div style="padding:0.25rem 0;"><span class="badge badge-${(c.risk_level||'minimal').toLowerCase()}">${c.risk_level||'?'}</span> ${c.phone}</div>`
+                    document.getElementById('connectionsData').innerHTML = data.map(c =>
+                        `<div style="padding:0.25rem 0;"><span class="badge badge-${(c.risk_level||'minimal').toLowerCase()}">${c.risk_level||'?'}</span> <a href="/results/${encodeURIComponent(c.phone)}" style="color:var(--accent);text-decoration:none;">${c.phone}</a></div>`
                     ).join('');
-                } else {
-                    el.textContent = 'No connected investigations found.';
                 }
-            }).catch(() => {
-                document.getElementById('connectionsData').textContent = 'Neo4j unavailable.';
-            });
+            }).catch(() => {});
 
         fetch('/api/graph/timeline/' + encodeURIComponent(phone))
             .then(r => r.json())
             .then(data => {
-                const el = document.getElementById('timelineData');
                 if (Array.isArray(data) && data.length > 0) {
-                    el.innerHTML = data.map(t =>
+                    document.getElementById('timelineData').innerHTML = data.map(t =>
                         `<div style="padding:0.25rem 0;border-bottom:1px solid rgba(51,65,85,0.3);">
                             <div style="font-weight:500;">${t.title || t.url}</div>
                             <div style="color:var(--text-secondary);font-size:0.75rem;">
@@ -279,12 +306,8 @@
                             </div>
                         </div>`
                     ).join('');
-                } else {
-                    el.textContent = 'No timeline data.';
                 }
-            }).catch(() => {
-                document.getElementById('timelineData').textContent = 'Neo4j unavailable.';
-            });
+            }).catch(() => {});
     </script>
 </body>
 </html>
