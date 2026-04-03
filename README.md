@@ -173,76 +173,6 @@ Step 9: RESULTS DISPLAY
 
 ---
 
-## Project Structure
-
-```
-osint-fr-ht/
-├── config.py                          # All config: API keys, URLs, timeouts, paths
-├── run.py                             # Application entrypoint (argparse, uvicorn)
-├── requirements.txt                   # Python dependencies
-├── Dockerfile                         # Multi-stage build (Python 3.11-slim)
-├── docker-compose.yml                 # 3 services: neo4j, tor, osint-app
-├── check_setup.py                     # Pre-flight environment checker
-│
-├── src/
-│   ├── osint/
-│   │   ├── __init__.py                # Exports OSINTManager
-│   │   └── osint_manager.py           # Central orchestrator for all handlers
-│   │
-│   ├── api_handlers/
-│   │   ├── __init__.py                # Re-exports all handler classes
-│   │   ├── base_handler.py            # Abstract base: rate limiting, retries, aiohttp
-│   │   ├── numverify.py               # Phone validation via NumVerify
-│   │   ├── truecaller.py              # Caller ID via TrueCaller
-│   │   ├── hunter.py                  # Email intelligence via Hunter.io
-│   │   ├── sherlock.py                # Username search via Sherlock CLI
-│   │   ├── maigret.py                 # Username search via Maigret CLI
-│   │   ├── blackbird.py               # Username/email search via Blackbird CLI
-│   │   ├── spiderfoot.py              # Automated scanning via SpiderFoot API
-│   │   └── ahmia_handler.py           # Dark web search + Tor scraping + risk scoring
-│   │
-│   ├── utils/
-│   │   ├── phone_validator.py         # phonenumbers-based validation
-│   │   ├── entity_resolver.py         # Dedup, normalize, confidence scoring
-│   │   └── neo4j_handler.py           # Graph DB: CRUD + analytics queries
-│   │
-│   ├── visualization/
-│   │   ├── __init__.py
-│   │   └── graph_generator.py         # NetworkX graph data builder
-│   │
-│   ├── scheduler/
-│   │   ├── __init__.py
-│   │   └── periodic_scanner.py        # APScheduler-based periodic re-scanning
-│   │
-│   └── web/
-│       ├── main.py                    # FastAPI app: routes, SSE, graph API
-│       ├── static/style.css
-│       └── templates/
-│           ├── index.html             # Search form + API status dashboard
-│           ├── results.html           # Full results + graph analytics + timeline
-│           └── history.html           # Past search history
-│
-└── data/
-    ├── results/                       # JSON result files per investigation
-    └── neo4j/                         # Neo4j data and logs (Docker volume)
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Backend** | Python 3.11, FastAPI, Uvicorn, asyncio, aiohttp |
-| **Dark Web** | Ahmia search engine, Tor SOCKS5 proxy (`aiohttp-socks`), BeautifulSoup |
-| **Graph Database** | Neo4j 5.12 with APOC and Graph Data Science plugins |
-| **Frontend** | Jinja2, TailwindCSS, Plotly.js (graphs + timeline), GSAP, Three.js |
-| **Scheduling** | APScheduler (AsyncIOScheduler) |
-| **Containerization** | Docker, Docker Compose (3-service stack) |
-| **Phone Validation** | `phonenumbers` library |
-| **CLI Tools** | Sherlock, Maigret, Blackbird (subprocess wrappers) |
-
----
 
 ## API Integrations
 
@@ -267,7 +197,7 @@ osint-fr-ht/
 - Docker and Docker Compose
 - Git
 
-### Quick Start (Docker — recommended)
+### Quick Start (Docker)
 
 ```bash
 # 1. Clone the repository
@@ -285,36 +215,6 @@ docker-compose up --build -d
 #    http://localhost:8000       — Web UI
 #    http://localhost:7474       — Neo4j Browser
 ```
-
-### Local Development (without Docker)
-
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Start Neo4j separately (or use Docker just for Neo4j + Tor)
-docker-compose up neo4j tor -d
-
-# 3. Set environment variables
-export NEO4J_URI=bolt://localhost:7687
-export NEO4J_USER=neo4j
-export NEO4J_PASSWORD=password
-export TOR_PROXY_HOST=localhost
-export TOR_PROXY_PORT=9050
-
-# 4. Run the application
-python run.py --host 0.0.0.0 --port 8000 --reload
-```
-
-### Verify Setup
-
-```bash
-python check_setup.py
-```
-
-This checks: Python version, required packages, API key configuration, CLI tool availability (Sherlock, Maigret, Blackbird), Neo4j connectivity, Tor proxy connectivity.
-
----
 
 ## Configuration (.env)
 
@@ -341,42 +241,6 @@ TOR_PROXY_PORT=9050
 SCHEDULER_ENABLED=false
 SCHEDULER_INTERVAL_HOURS=6
 ```
-
----
-
-## Running the Application
-
-```bash
-# Production (via Docker)
-docker-compose up -d
-
-# Development
-python run.py --host 0.0.0.0 --port 8000 --reload --debug
-
-# Check API status
-curl http://localhost:8000/api/status
-```
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Web UI — search form with API status dashboard |
-| `POST` | `/search` | Run full OSINT investigation (JSON response) |
-| `POST` | `/search/stream` | SSE stream of investigation progress |
-| `GET` | `/results/{phone}` | Results dashboard for a phone number |
-| `GET` | `/download/{phone}` | Download results as JSON |
-| `GET` | `/history` | Search history page |
-| `GET` | `/api/status` | API health status for all integrations |
-| `GET` | `/api/graph/connections/{phone}` | Connected phone numbers (2-hop) |
-| `GET` | `/api/graph/clusters` | Community detection (Louvain) |
-| `GET` | `/api/graph/high-risk` | Entities with multiple high-risk dark web mentions |
-| `GET` | `/api/graph/centrality` | Betweenness centrality (top 20 facilitators) |
-| `GET` | `/api/graph/network/{phone}` | Full subgraph for visualization |
-| `GET` | `/api/graph/timeline/{phone}` | Temporal activity timeline |
-| `GET` | `/api/graph/movement/{phone}` | Geographic movement pattern detection |
 
 ---
 
@@ -480,24 +344,6 @@ The following are **publicly documented** human trafficking cases from law enfor
 
 ---
 
-### Case 3: Backpage.com Network (USA, seized 2018)
-
-**Background:** Backpage.com was the largest online marketplace for sex ads in the US before it was seized by the DOJ in 2018. Analysis of Backpage data revealed that many traffickers used the same phone numbers across hundreds of ads in different cities, the same email to manage multiple accounts, and the same usernames on linked platforms.
-
-**How this tool would help:**
-- Input any phone number from historical Backpage ad data (publicly available via court records)
-- Sherlock/Maigret would find the same username active on social media, dating sites, and other ad platforms
-- The cross-entity matching in Ahmia would find the same phone + email combination appearing on dark web forums that mirror old Backpage content
-- Temporal tracking would show the same phone appearing in different cities over weeks — a strong indicator of circuit trafficking
-
-**Test data pattern:** Single phone number appearing in ads across 5+ cities within 30 days, same email managing accounts on 3+ platforms, username variations following a pattern (`sweetie_ny`, `sweetie_la`, `sweetie_chi`).
-
-**Public references:**
-- US Department of Justice: "Backpage.com and Affiliated Websites" case documents
-- Senate Permanent Subcommittee on Investigations: "Backpage.com's Knowing Facilitation of Online Sex Trafficking" report
-
----
-
 ### Case 4: Polaris Project — Trafficking Hotline Data Patterns (USA)
 
 **Background:** The Polaris Project operates the US National Human Trafficking Hotline. Their annual reports document common patterns: traffickers use prepaid/burner phones, rotate numbers every 2-4 weeks, share numbers across victim-posted ads, and maintain a "digital footprint" that connects to dark web forums.
@@ -513,48 +359,6 @@ The following are **publicly documented** human trafficking cases from law enfor
 - Polaris Project: "Typology of Modern Slavery" report
 - National Human Trafficking Hotline annual reports (polarisproject.org)
 
----
-
-### Case 5: Sunitha Krishnan / Prajwala Foundation Cases (India)
-
-**Background:** Prajwala Foundation, led by Sunitha Krishnan, has worked extensively on rescuing trafficking victims in India, particularly from Kamathipura (Mumbai), Sonagachi (Kolkata), and GB Road (Delhi). Their documented cases show traffickers using specific phone networks and online recruitment through job portals and social media.
-
-**How this tool would help:**
-- India-specific keywords in the risk scorer (`kamathipura`, `sonagachi`, `gb road`, `devadasi`, `jogini`) would boost risk scores for dark web results mentioning these locations
-- Phone numbers from known trafficking hotspots could be investigated to map the recruiter-to-destination network
-- Neo4j graph analytics would reveal whether isolated cases are actually connected through shared infrastructure
-
-**Public references:**
-- Prajwala Foundation case documentation (prajwalaindia.com)
-- UNODC reports on trafficking in South Asia
-
----
-
-### How to Use These Cases for Testing
-
-1. **Do NOT use real victim phone numbers.** Use only publicly known trafficker/organizational phone numbers from court records, or create synthetic test data following the patterns described above.
-
-2. **Synthetic test workflow:**
-   ```
-   # Create a set of test phone numbers that simulate a trafficking network
-   # Phone A (recruiter): connected to emails on job-portal domains
-   # Phone B (transporter): same email domain, different cities in dark web mentions
-   # Phone C (handler): shares username pattern with A and B
-
-   # Run investigation on each
-   POST /search {"phone_number": "+91XXXXXXXXXX", "include_darkweb": true}
-
-   # After all three are in Neo4j, check graph analytics:
-   GET /api/graph/clusters          # Should group A, B, C together
-   GET /api/graph/centrality        # Recruiter phone should have highest centrality
-   GET /api/graph/connections/+91A  # Should show B and C as connected
-   ```
-
-3. **Enable periodic scanning** to simulate monitoring:
-   ```env
-   SCHEDULER_ENABLED=true
-   SCHEDULER_INTERVAL_HOURS=1   # hourly for testing
-   ```
 
 ---
 
@@ -568,8 +372,3 @@ The following are **publicly documented** human trafficking cases from law enfor
 - **Neo4j GDS:** Community detection and centrality require sufficient graph data. Single investigations with few entities will not produce meaningful analytics — the value increases as more phone numbers are investigated and the graph grows.
 - **This tool does not replace human judgment.** All findings should be verified by trained investigators before any action is taken.
 
----
-
-## License
-
-This project is developed for academic and research purposes as part of a college project on AI-enhanced OSINT for human trafficking investigation.
