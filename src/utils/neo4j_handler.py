@@ -314,28 +314,18 @@ class Neo4jHandler:
     async def get_subgraph_for_gnn(self, phone: str) -> dict[str, Any]:
         """Extract 2-hop subgraph around a phone for GNN feature extraction."""
         query = """
-        MATCH path = (p:Phone {number: $phone})-[*1..2]-(neighbor)
-        WITH collect(DISTINCT neighbor) + [p] AS all_nodes,
-             [r IN collect(DISTINCT relationships(path)) | r] AS all_rels_nested
+        MATCH (p:Phone {number: $phone})-[*1..2]-(neighbor)
+        WITH p, collect(DISTINCT neighbor) AS neighbors
+        WITH neighbors + [p] AS all_nodes
         UNWIND all_nodes AS n
-        WITH collect(DISTINCT n) AS nodes, all_rels_nested
-        UNWIND all_rels_nested AS rel_list
-        UNWIND rel_list AS rel
-        WITH nodes, collect(DISTINCT rel) AS rels
-        UNWIND nodes AS n
         OPTIONAL MATCH (n)-[mi:MENTIONED_IN]->()
-        OPTIONAL MATCH (n)-[:HAS_EMAIL]->()
-        WITH n, nodes, rels,
-             count(DISTINCT mi) AS mention_count
+        WITH n, count(DISTINCT mi) AS mention_count
         OPTIONAL MATCH (n)-[:HAS_EMAIL]->(e:Email)
-        WITH n, nodes, rels, mention_count,
-             count(DISTINCT e) AS email_count
+        WITH n, mention_count, count(DISTINCT e) AS email_count
         OPTIONAL MATCH (n)-[:HAS_USERNAME]->(u:Username)
-        WITH n, nodes, rels, mention_count, email_count,
-             count(DISTINCT u) AS username_count
-        OPTIONAL MATCH (n)-[:CROSS_REFERENCED]->()
-        WITH n, nodes, rels, mention_count, email_count, username_count,
-             count(*) AS cross_count
+        WITH n, mention_count, email_count, count(DISTINCT u) AS username_count
+        OPTIONAL MATCH (n)-[cr:CROSS_REFERENCED]->()
+        WITH n, mention_count, email_count, username_count, count(DISTINCT cr) AS cross_count
         RETURN
             id(n) AS node_id,
             labels(n) AS labels,
@@ -351,7 +341,8 @@ class Neo4jHandler:
         """
         edge_query = """
         MATCH (p:Phone {number: $phone})-[*1..2]-(neighbor)
-        WITH collect(DISTINCT neighbor) + [p] AS all_nodes
+        WITH p, collect(DISTINCT neighbor) AS neighbors
+        WITH neighbors + [p] AS all_nodes
         UNWIND all_nodes AS a
         MATCH (a)-[r]-(b)
         WHERE b IN all_nodes

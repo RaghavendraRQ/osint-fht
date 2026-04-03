@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     if not neo4j_ok:
         logger.warning("Neo4j is not reachable – graph features will be unavailable")
 
-    osint_manager = OSINTManager(neo4j=neo4j_handler if neo4j_ok else None)
+    osint_manager = OSINTManager(neo4j=neo4j_handler)
 
     if config.GNN_ENABLED:
         gnn_scorer = GNNRiskScorer()
@@ -87,13 +87,27 @@ async def results_page(request: Request, phone: str):
 
     gnn_data: dict = {}
     if gnn_scorer and neo4j_handler:
-        gnn_data = await gnn_scorer.score(neo4j_handler, phone)
+        try:
+            gnn_data = await gnn_scorer.score(neo4j_handler, phone)
+        except Exception:
+            pass
 
-    network: dict = {}
+    network: dict = {"nodes": [], "edges": []}
     if neo4j_handler:
-        network = await neo4j_handler.get_network(phone)
+        try:
+            network = await neo4j_handler.get_network(phone)
+        except Exception:
+            pass
 
-    graph_data = GraphGenerator.build_plotly_data(network) if network else {}
+    if not network.get("nodes") and data:
+        network = GraphGenerator.build_network_from_entities(
+            data.get("phone", phone),
+            data.get("email"),
+            data.get("entities", {}),
+            data.get("darkweb"),
+        )
+
+    graph_data = GraphGenerator.build_plotly_data(network)
 
     return templates.TemplateResponse("results.html", {
         "request": request,

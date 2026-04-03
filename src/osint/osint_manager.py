@@ -72,11 +72,16 @@ class OSINTManager:
         if include_darkweb:
             darkweb_results = await self._darkweb_handler.search(phone, email)
 
+        e164 = validation.get("e164", phone)
+
         if self.neo4j:
-            await self.neo4j.store_investigation(phone, email, api_results, entities, darkweb_results)
+            try:
+                await self.neo4j.store_investigation(e164, email, api_results, entities, darkweb_results)
+            except Exception as exc:
+                logger.error("Neo4j storage failed: %s", exc)
 
         result = {
-            "phone": phone,
+            "phone": e164,
             "email": email,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "validation": validation,
@@ -86,7 +91,7 @@ class OSINTManager:
             "summary": self._build_summary(api_results, darkweb_results),
         }
 
-        self._save_results(phone, result)
+        self._save_results(e164, result)
         return result
 
     async def investigate_stream(
@@ -123,15 +128,21 @@ class OSINTManager:
             darkweb_results = await self._darkweb_handler.search(phone, email)
             yield self._event("darkweb", darkweb_results)
 
+        e164 = validation.get("e164", phone)
+
         if self.neo4j:
-            await self.neo4j.store_investigation(phone, email, all_results, entities, darkweb_results)
-            yield self._event("status", {"message": "Stored in Neo4j graph"})
+            try:
+                await self.neo4j.store_investigation(e164, email, all_results, entities, darkweb_results)
+                yield self._event("status", {"message": "Stored in Neo4j graph"})
+            except Exception as exc:
+                logger.error("Neo4j storage failed: %s", exc)
+                yield self._event("status", {"message": f"Neo4j storage failed: {exc}"})
 
         summary = self._build_summary(all_results, darkweb_results)
         yield self._event("summary", summary)
 
         full_result = {
-            "phone": phone,
+            "phone": e164,
             "email": email,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "validation": validation,
@@ -140,7 +151,7 @@ class OSINTManager:
             "darkweb": darkweb_results,
             "summary": summary,
         }
-        self._save_results(phone, full_result)
+        self._save_results(e164, full_result)
         yield self._event("complete", {"message": "Investigation complete"})
 
     def _build_summary(self, api_results: list[dict], darkweb: dict | None) -> dict:

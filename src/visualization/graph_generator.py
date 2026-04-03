@@ -22,6 +22,81 @@ class GraphGenerator:
     """Converts Neo4j network data into a format Plotly can render."""
 
     @staticmethod
+    def build_network_from_entities(
+        phone: str,
+        email: str | None,
+        entities: dict[str, list],
+        darkweb: dict | None,
+    ) -> dict[str, list]:
+        """Build a network dict from JSON entities when Neo4j is unavailable."""
+        nodes: list[dict] = []
+        edges: list[dict] = []
+        seen: set[str] = set()
+
+        def add_node(nid: str, label: str):
+            if nid and nid not in seen:
+                seen.add(nid)
+                nodes.append({"id": nid, "label": label})
+
+        add_node(phone, "Phone")
+
+        if email:
+            add_node(email, "Email")
+            edges.append({"source": phone, "target": email, "type": "HAS_EMAIL"})
+
+        for ent in entities.get("emails", []):
+            val = ent.get("value", "")
+            add_node(val, "Email")
+            edges.append({"source": phone, "target": val, "type": "HAS_EMAIL"})
+
+        for ent in entities.get("usernames", []):
+            val = ent.get("value", "")
+            add_node(val, "Username")
+            edges.append({"source": phone, "target": val, "type": "HAS_USERNAME"})
+
+        for ent in entities.get("profiles", []):
+            site = ent.get("site") or ent.get("value", "")[:40]
+            url = ent.get("value", "")
+            add_node(site, "Profile")
+            un = ent.get("username") or ent.get("value", "").split("/")[-1]
+            if un in seen:
+                edges.append({"source": un, "target": site, "type": "HAS_PROFILE"})
+            else:
+                edges.append({"source": phone, "target": site, "type": "HAS_PROFILE"})
+
+        for ent in entities.get("domains", []):
+            val = ent.get("value", "")
+            add_node(val, "Domain")
+            edges.append({"source": phone, "target": val, "type": "HAS_DOMAIN"})
+
+        for ent in entities.get("names", []):
+            val = ent.get("value", "")
+            add_node(val, "Name")
+            edges.append({"source": phone, "target": val, "type": "HAS_NAME"})
+
+        for ent in entities.get("phones", []):
+            val = ent.get("value", "")
+            if val != phone:
+                add_node(val, "Phone")
+                edges.append({"source": phone, "target": val, "type": "RELATED_PHONE"})
+
+        if darkweb and darkweb.get("success"):
+            dw = darkweb.get("data", {})
+            for r in dw.get("results", []):
+                title = r.get("title", "")[:50] or r.get("url", "")[:50]
+                if title:
+                    add_node(title, "DarkWebSite")
+                    edges.append({"source": phone, "target": title, "type": "MENTIONED_IN"})
+
+            for cm in dw.get("cross_matches", []):
+                url = cm.get("url", "")[:50]
+                if url:
+                    add_node(url, "CrossMatch")
+                    edges.append({"source": phone, "target": url, "type": "CROSS_REFERENCED"})
+
+        return {"nodes": nodes, "edges": edges}
+
+    @staticmethod
     def build_plotly_data(network: dict[str, list]) -> dict[str, Any]:
         nodes = network.get("nodes", [])
         edges = network.get("edges", [])
