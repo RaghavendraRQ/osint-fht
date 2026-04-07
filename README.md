@@ -12,6 +12,7 @@
 - [Tech Stack](#tech-stack)
 - [API Integrations](#api-integrations)
 - [Setup & Installation](#setup--installation)
+- [Seeding Neo4j from result JSON](#seeding-neo4j-from-result-json)
 - [Configuration (.env)](#configuration-env)
 - [Running the Application](#running-the-application)
 - [API Endpoints](#api-endpoints)
@@ -215,6 +216,31 @@ docker-compose up --build -d
 #    http://localhost:8000       — Web UI
 #    http://localhost:7474       — Neo4j Browser
 ```
+
+### Seeding Neo4j from result JSON
+
+Investigation JSON files under `data/results/` (for example saved demo cases) can be written into Neo4j using the same logic as a live run (`Neo4jHandler.store_investigation`). This is useful for populating Neo4j Browser and graph analytics without re-querying APIs.
+
+**Docker Compose** (from the host, with the stack running):
+
+```bash
+docker-compose exec osint-app python scripts/seed_neo4j_from_results.py
+```
+
+Load specific files only:
+
+```bash
+docker-compose exec osint-app python scripts/seed_neo4j_from_results.py \
+  --only 12127556183.json,14435559201.json,18505553847.json
+```
+
+**Local Python** (Neo4j reachable on localhost; matches `.env`):
+
+```bash
+NEO4J_URI=bolt://localhost:7687 python scripts/seed_neo4j_from_results.py
+```
+
+Optional `--dir /path/to/json/dir` defaults to `data/results/`. Re-running the script is idempotent for most merges; `MENTIONED_IN` mention counts may increment as in normal pipeline behavior.
 
 ## Configuration (.env)
 

@@ -42,6 +42,7 @@ WORKDIR /app
 COPY config.py run.py check_setup.py ./
 COPY src/ src/
 COPY data/ data/
+COPY scripts/seed_neo4j_from_results.py ./scripts/
 
 RUN mkdir -p data/results data/neo4j data/models
 

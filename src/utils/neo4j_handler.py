@@ -114,6 +114,21 @@ class Neo4jHandler:
                 phone=phone, name=ent["value"],
             )
 
+        for ent in entities.get("phones", []):
+            other = ent.get("value") or ""
+            if not other or other == phone:
+                continue
+            await tx.run(
+                """
+                MATCH (p:Phone {number: $phone})
+                MERGE (p2:Phone {number: $other})
+                ON CREATE SET p2.first_seen = $now
+                SET p2.last_seen = $now
+                MERGE (p)-[:RELATED_PHONE]->(p2)
+                """,
+                phone=phone, other=other, now=now,
+            )
+
         # Carrier info from numverify
         for r in api_results:
             if r.get("source") == "numverify" and r.get("success"):
