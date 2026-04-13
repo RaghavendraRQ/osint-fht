@@ -20,6 +20,11 @@ from src.osint import OSINTManager
 from src.scheduler.periodic_scanner import PeriodicScanner
 from src.utils.neo4j_handler import Neo4jHandler
 from src.visualization.graph_generator import GraphGenerator
+from src.web.phone_paths import (
+    canonical_phone_for_graph,
+    display_title_for_results,
+    stem_ends_with_alone,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,33 +83,42 @@ async def index(request: Request):
 
 
 @app.get("/results/{phone}", response_class=HTMLResponse)
-async def results_page(request: Request, phone: str):
+async def results_page(
+    request: Request,
+    phone: str,
+    alone: bool = Query(False, description="Entity graph: hide paths through other phone hubs"),
+):
     clean = phone.replace("+", "").replace("-", "").replace(" ", "")
     result_file = config.RESULTS_DIR / f"{clean}.json"
     data: dict = {}
     if result_file.exists():
         data = json.loads(result_file.read_text())
 
+    graph_alone = alone or stem_ends_with_alone(clean)
+    graph_phone = canonical_phone_for_graph(data, clean) if data else clean
+    display_title = display_title_for_results(data, phone) if data else phone
+
     gnn_data: dict = {}
     if gnn_scorer and neo4j_handler:
         try:
-            gnn_data = await gnn_scorer.score(neo4j_handler, phone)
+            gnn_data = await gnn_scorer.score(neo4j_handler, graph_phone)
         except Exception:
             pass
 
     network: dict = {"nodes": [], "edges": []}
     if neo4j_handler:
         try:
-            network = await neo4j_handler.get_network(phone)
+            network = await neo4j_handler.get_network(graph_phone, alone=graph_alone)
         except Exception:
             pass
 
     if not network.get("nodes") and data:
         network = GraphGenerator.build_network_from_entities(
-            data.get("phone", phone),
+            data.get("phone", graph_phone),
             data.get("email"),
             data.get("entities", {}),
             data.get("darkweb"),
+            alone=graph_alone,
         )
 
     graph_data = GraphGenerator.build_plotly_data(network)
@@ -112,6 +126,9 @@ async def results_page(request: Request, phone: str):
     return templates.TemplateResponse("results.html", {
         "request": request,
         "phone": phone,
+        "graph_phone": graph_phone,
+        "graph_alone": graph_alone,
+        "display_title": display_title,
         "data": data,
         "gnn": gnn_data,
         "graph_data": json.dumps(graph_data, default=str),
@@ -125,8 +142,15 @@ async def history_page(request: Request):
     for path in sorted(config.RESULTS_DIR.glob("*.json"), reverse=True):
         try:
             d = json.loads(path.read_text())
+            stem = path.stem
+            link_key = stem
+            if stem_ends_with_alone(stem):
+                label = d.get("history_label") or d.get("display_name") or stem.replace("_", " ")
+            else:
+                label = d.get("phone", stem)
             results.append({
-                "phone": d.get("phone", path.stem),
+                "phone": link_key,
+                "display_label": label,
                 "timestamp": d.get("timestamp", ""),
                 "risk_level": d.get("summary", {}).get("risk_level", "UNKNOWN"),
                 "risk_score": d.get("summary", {}).get("risk_score", 0),
@@ -209,10 +233,10 @@ async def api_status():
 # ── Graph Analytics API ─────────────────────────────────────────
 
 @app.get("/api/graph/connections/{phone}")
-async def graph_connections(phone: str):
+async def graph_connections(phone: str, alone: bool = Query(False)):
     if not neo4j_handler:
         return JSONResponse({"error": "Neo4j not available"}, status_code=503)
-    return await neo4j_handler.get_connections(phone)
+    return await neo4j_handler.get_connections(phone, alone=alone)
 
 
 @app.get("/api/graph/clusters")
@@ -237,10 +261,10 @@ async def graph_centrality():
 
 
 @app.get("/api/graph/network/{phone}")
-async def graph_network(phone: str):
+async def graph_network(phone: str, alone: bool = Query(False)):
     if not neo4j_handler:
         return JSONResponse({"error": "Neo4j not available"}, status_code=503)
-    return await neo4j_handler.get_network(phone)
+    return await neo4j_handler.get_network(phone, alone=alone)
 
 
 @app.get("/api/graph/timeline/{phone}")

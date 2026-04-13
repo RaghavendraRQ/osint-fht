@@ -192,7 +192,9 @@ class Neo4jHandler:
 
     # ── Analytics ────────────────────────────────────────────────
 
-    async def get_connections(self, phone: str) -> list[dict]:
+    async def get_connections(self, phone: str, alone: bool = False) -> list[dict]:
+        if alone:
+            return []
         query = """
         MATCH (p:Phone {number: $phone})-[*1..2]-(connected:Phone)
         WHERE connected.number <> $phone
@@ -270,9 +272,16 @@ class Neo4jHandler:
             result = await s.run(query)
             return [dict(r) async for r in result]
 
-    async def get_network(self, phone: str) -> dict[str, list]:
-        query = """
-        MATCH path = (p:Phone {number: $phone})-[*1..2]-(connected)
+    async def get_network(self, phone: str, alone: bool = False) -> dict[str, list]:
+        """Return 2-hop ego network. When ``alone`` is True, paths may not pass through any other
+        ``Phone`` node — avoids demo cases merging into one graph via RELATED_PHONE or shared entities.
+        """
+        alone_filter = ""
+        if alone:
+            alone_filter = "WHERE ALL(n IN nodes(path) WHERE NOT n:Phone OR n.number = $phone)"
+        query = f"""
+        MATCH path = (p:Phone {{number: $phone}})-[*1..2]-(connected)
+        {alone_filter}
         UNWIND relationships(path) AS rel
         WITH startNode(rel) AS src, endNode(rel) AS tgt, type(rel) AS rtype
         RETURN DISTINCT

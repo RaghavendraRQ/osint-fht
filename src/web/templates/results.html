@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Results – {{ phone }}</title>
+    <title>Results – {{ display_title }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
@@ -27,7 +27,7 @@
         <div class="card" style="border-color: {% if data.summary.risk_level == 'CRITICAL' %}var(--danger){% elif data.summary.risk_level == 'HIGH' %}#f59e0b{% else %}var(--border){% endif %};">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
                 <div>
-                    <h2 style="font-size:1.5rem;font-weight:700;">{{ phone }}</h2>
+                    <h2 style="font-size:1.5rem;font-weight:700;">{{ display_title }}</h2>
                     <p style="color:var(--text-secondary);font-size:0.875rem;">Investigated: {{ data.timestamp }}</p>
                 </div>
                 <div style="text-align:right;">
@@ -112,6 +112,11 @@
         <!-- Network Graph -->
         <div class="card">
             <div class="card-title">Entity Relationship Graph</div>
+            {% if graph_alone %}
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin:0 0 0.75rem 0;">
+                Isolated view: only this investigation’s hub and its direct entities (paths through other phone numbers are hidden).
+            </p>
+            {% endif %}
             <div id="networkGraph" style="width:100%;height:500px;"></div>
         </div>
 
@@ -219,8 +224,9 @@
                 <div>
                     <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;">Connected Investigations</h4>
                     <div id="connectionsData" style="font-size:0.8125rem;">
-                        {% if data and data.entities and data.entities.phones %}
-                        {% set other_phones = [] %}
+                        {% if graph_alone %}
+                        <span style="color:var(--text-secondary);">Isolated view: other linked phone numbers are hidden for this slide.</span>
+                        {% elif data and data.entities and data.entities.phones %}
                         {% for p in data.entities.phones %}
                         {% if p.value != data.phone %}
                         <div style="padding:0.25rem 0;">
@@ -282,19 +288,25 @@
                 '<p style="text-align:center;color:var(--text-secondary);padding:2rem;">No graph data available. Run an investigation first.</p>';
         }
 
-        const phone = '{{ phone }}';
+        const graphPhone = '{{ graph_phone }}';
+        const graphAlone = {{ 'true' if graph_alone else 'false' }};
+        const graphQuery = graphAlone ? '?alone=true' : '';
 
-        fetch('/api/graph/connections/' + encodeURIComponent(phone))
+        fetch('/api/graph/connections/' + encodeURIComponent(graphPhone) + graphQuery)
             .then(r => r.json())
             .then(data => {
-                if (Array.isArray(data) && data.length > 0) {
+                if (!Array.isArray(data)) return;
+                if (data.length > 0) {
                     document.getElementById('connectionsData').innerHTML = data.map(c =>
                         `<div style="padding:0.25rem 0;"><span class="badge badge-${(c.risk_level||'minimal').toLowerCase()}">${c.risk_level||'?'}</span> <a href="/results/${encodeURIComponent(c.phone)}" style="color:var(--accent);text-decoration:none;">${c.phone}</a></div>`
                     ).join('');
+                } else if (graphAlone) {
+                    document.getElementById('connectionsData').innerHTML =
+                        '<span style="color:var(--text-secondary);">Isolated view: other linked phone numbers are hidden for this slide.</span>';
                 }
             }).catch(() => {});
 
-        fetch('/api/graph/timeline/' + encodeURIComponent(phone))
+        fetch('/api/graph/timeline/' + encodeURIComponent(graphPhone))
             .then(r => r.json())
             .then(data => {
                 if (Array.isArray(data) && data.length > 0) {

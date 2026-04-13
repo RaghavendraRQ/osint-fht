@@ -27,6 +27,7 @@ class GraphGenerator:
         email: str | None,
         entities: dict[str, list],
         darkweb: dict | None,
+        alone: bool = False,
     ) -> dict[str, list]:
         """Build a network dict from JSON entities when Neo4j is unavailable."""
         nodes: list[dict] = []
@@ -76,7 +77,7 @@ class GraphGenerator:
 
         for ent in entities.get("phones", []):
             val = ent.get("value", "")
-            if val != phone:
+            if val != phone and not alone:
                 add_node(val, "Phone")
                 edges.append({"source": phone, "target": val, "type": "RELATED_PHONE"})
 
